@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  postgres-loc-management:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: loc_management
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./migrations/loc-management:/docker-entrypoint-initdb.d
+      - pg_locmgmt_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-loc-history:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: loc_history
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./migrations/loc-history:/docker-entrypoint-initdb.d
+      - pg_lochist_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  loc-history:
+    build:
+      context: .
+      dockerfile: Dockerfile.loc-history
+    environment:
+      DATABASE_URL: postgres://postgres:password@postgres-loc-history:5432/loc_history?sslmode=disable
+      GRPC_PORT: "50051"
+      PORT: "8081"
+    ports:
+      - "8081:8081"
+      - "50051:50051"
+    depends_on:
+      postgres-loc-history:
+        condition: service_healthy
+
+  loc-management:
+    build:
+      context: .
+      dockerfile: Dockerfile.loc-management
+    environment:
+      DATABASE_URL: postgres://postgres:password@postgres-loc-management:5432/loc_management?sslmode=disable
+      HISTORY_SERVICE_ADDR: loc-history:50051
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres-loc-management:
+        condition: service_healthy
+      loc-history:
+        condition: service_started
+
+volumes:
+  pg_locmgmt_data:
+  pg_lochist_data:

@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package location;
+
+option go_package = "github.com/training/GOLANG_FOR_STUDENTS/pkg/proto;proto";
+
+service LocationHistoryService {
+  rpc SaveLocation(SaveLocationRequest) returns (SaveLocationResponse);
+}
+
+message SaveLocationRequest {
+  string username  = 1;
+  double latitude  = 2;
+  double longitude = 3;
+  string timestamp = 4;
+}
+
+message SaveLocationResponse {
+  bool success = 1;
+}

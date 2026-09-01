@@ -1,79 +1,185 @@
-# Golang capstone project
+# Location Processing System
 
-## Project overview
+A system for tracking and querying user locations, built with Go microservices.
 
-### General concept
+## Overview
 
-Design and develop a system to process user locations and provides the ability to search for clients by location (coordinates) and radius. Except that system should provide the ability to calculate the distance traveled by a person in some time range.
+The system consists of two microservices:
 
-The system provides 3 REST endpoints for the backend clients with the following features:
+| Service | Port | Responsibility |
+|---|---|---|
+| **loc-management** | 8080 | Update user location, search users by radius |
+| **loc-history** | 8081 (HTTP) / 50051 (gRPC) | Store location history, calculate travel distance |
 
-1. Update current user location by the username.
-2. Search for users in some location within the provided radius (with pagination).
-3. Returns distance traveled by a person within some date/time range. Time range defaults to 1 day. 
+When a user's location is updated, `loc-management` persists it to its own database and forwards the event to `loc-history` via gRPC/Protobuf. `loc-history` stores all historical events, enabling distance queries over any time range.
 
-    Examples: 
+## API Reference
 
-    - For 35.12314, 27.64532 → 39.12355, 27.64538 distance 445km
-    - For 35.12314, 27.64532 → 39.12355, 27.64538 → 35.12314, 27.64532 distance is 890km
+### Service 1 – loc-management
 
-REST interface and contracts should be designed. 
+#### Update user location
+```
+PUT /api/v1/users/:username/location
+Content-Type: application/json
 
-The system should validate all input data, and respond with the proper status code and message. 
+{
+  "latitude": 35.12314,
+  "longitude": 27.64532
+}
+```
+Response `200 OK`:
+```json
+{"message": "location updated"}
+```
 
-- username - 4-16 symbols (a-zA-Z0-9 symbols are acceptable)
-- coordinates - fractional part of a number should be limited by the 8 signs, latitude and longitude should be validated by the regular rules. For example:
-    - 35.12314, 27.64532
-    - 39.12355, 27.64538
-- dates - use ISO 8601 date format (2021-09-02T11:26:18+00:00)
+#### Search users by location and radius
+```
+GET /api/v1/users?lat=35.12314&lon=27.64532&radius=100&page=1&size=10
+```
+Response `200 OK`:
+```json
+{
+  "users": [
+    {"username": "alice", "latitude": 35.12, "longitude": 27.64}
+  ],
+  "total": 1,
+  "page": 1,
+  "size": 10
+}
+```
 
-### Implementation notices
+- `radius` is in **kilometres**
+- `page` and `size` are optional (defaults: 1 and 10)
 
-The system should consist of 2 microservices:
+### Service 2 – loc-history
 
-1. Location management - for endpoints 1 and 2.
-2. Location History management - for 3rd endpoint.
+#### Get distance traveled
+```
+GET /api/v1/users/:username/distance?from=2021-09-01T00:00:00Z&to=2021-09-02T00:00:00Z
+```
+Response `200 OK`:
+```json
+{
+  "username": "alice",
+  "distance_km": 445.87,
+  "from": "2021-09-01T00:00:00Z",
+  "to": "2021-09-02T00:00:00Z"
+}
+```
 
-Main data flow:
+- Dates use **ISO 8601 / RFC3339** format. The `+` sign must be URL-encoded as `%2B` in query strings.
+- `to` is optional; when omitted it defaults to `from + 24h`.
 
-1. User updates his current location
-2. The current location is updated in the microservice 1
-3. Microservice 1 sends the updated location to microservice 2 using Protobuf and GRPC
-4. Microservice 2 prepares and persists the data
+### Validation rules
 
-![alt text](./resources/AppStructure.png)
+| Field | Rule |
+|---|---|
+| `username` | 4–16 characters, `[a-zA-Z0-9]` only |
+| `latitude` | −90 … 90 |
+| `longitude` | −180 … 180 |
+| `radius` | positive number, km |
+| dates | ISO 8601 (RFC3339) |
 
-For microservices development, you could use any web framework or plain go. Multiple popular web frameworks are listed before.
+## Local Setup
 
-- [https://github.com/gin-gonic/gin](https://github.com/gin-gonic/gin)
-- [https://echo.labstack.com/](https://echo.labstack.com/)
+### Prerequisites
 
-The system should support the graceful shutdown, proper error handling, and logging.
+- Go 1.22+
+- Docker and Docker Compose
+- `protoc` + plugins (only needed to regenerate proto files)
 
-Also, the ability to export Prometheus metrics would be a plus.
+### Run with Docker Compose (recommended)
 
-Any RDBMS or NoSQL solution be used as a data storage, depends on your habits.
+```bash
+docker-compose up --build
+```
 
-### Testing
+This starts both PostgreSQL databases and both services. The databases are
+auto-initialized from the SQL files in `migrations/`.
 
-The system should be covered with unit test cases. Make sure that all important parts of the system are covered with the unit tests. For unit testing use table tests pattern on-demand to cover all needed conditions.
+### Run locally (without Docker)
 
-All endpoint contracts should be covered with functional test cases. For positive and negative cases. DB logic could be mocked.
+1. Start two PostgreSQL instances (or adjust the URLs):
 
-Each endpoint should be covered by the integration tests as well. 
+```bash
+# DB for loc-management
+docker run -d --name pgmgmt -e POSTGRES_DB=loc_management \
+  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=password \
+  -p 5432:5432 postgres:16-alpine
 
-Integration tests should be included only when a specific tag is provided. Otherwise, only unit and functional test cases are run.
+# DB for loc-history
+docker run -d --name pghist -e POSTGRES_DB=loc_history \
+  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=password \
+  -p 5433:5432 postgres:16-alpine
+```
 
-### Documentation
+2. Apply the schema migrations:
 
-The project should be well documented, due to Golang guidelines.
+```bash
+psql "postgres://postgres:password@localhost:5432/loc_management" \
+  -f migrations/loc-management/001_init.sql
 
-Also, [README.md](http://readme.md) file should be present and contain comprehensive instruction for local environment setup
+psql "postgres://postgres:password@localhost:5433/loc_history" \
+  -f migrations/loc-history/001_init.sql
+```
 
-### Deployment (optional)
+3. Start `loc-history` first (it provides the gRPC endpoint):
 
-The developed application should be dockerized, for orchestration Kubernetes or Docker-compose could be used. 
+```bash
+make run-history
+```
 
-The ability to run the application with a single command will be a plus. (consider using multi-stage builds).
+4. Start `loc-management`:
 
-Good Luck!!!
+```bash
+make run-management
+```
+
+### Environment variables
+
+**loc-management:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | `postgres://postgres:password@localhost:5432/loc_management?sslmode=disable` | PostgreSQL connection string |
+| `HISTORY_SERVICE_ADDR` | `localhost:50051` | gRPC address of loc-history |
+| `PORT` | `8080` | HTTP listen port |
+
+**loc-history:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | `postgres://postgres:password@localhost:5433/loc_history?sslmode=disable` | PostgreSQL connection string |
+| `GRPC_PORT` | `50051` | gRPC listen port |
+| `PORT` | `8081` | HTTP listen port |
+
+## Testing
+
+```bash
+# Unit and functional tests
+make test
+
+# Integration tests (requires running services)
+LOC_MGMT_URL=http://localhost:8080 make test-integration
+```
+
+Integration tests are gated behind the `integration` build tag so they are
+never run accidentally in CI without the required infrastructure.
+
+## Protobuf / gRPC
+
+The service contract lives in `pkg/proto/location.proto`. To regenerate the
+Go bindings after modifying it:
+
+```bash
+# Install tools (once)
+go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+# Regenerate
+make proto
+```
+
+## Observability
+
+Both services expose Prometheus metrics at `/metrics` and a liveness endpoint at `/health`.
