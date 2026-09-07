@@ -21,6 +21,7 @@ import (
 	"github.com/training/GOLANG_FOR_STUDENTS/internal/locmanagement/handler"
 	"github.com/training/GOLANG_FOR_STUDENTS/internal/locmanagement/repository"
 	"github.com/training/GOLANG_FOR_STUDENTS/internal/locmanagement/service"
+	"github.com/training/GOLANG_FOR_STUDENTS/pkg/metrics"
 )
 
 func main() {
@@ -59,6 +60,7 @@ func main() {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(requestLogger(logger))
+	router.Use(metrics.RequestCounter("loc-management"))
 
 	api := router.Group("/api/v1")
 	{

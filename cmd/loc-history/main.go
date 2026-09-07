@@ -23,6 +23,7 @@ import (
 	"github.com/training/GOLANG_FOR_STUDENTS/internal/lochistory/handler"
 	"github.com/training/GOLANG_FOR_STUDENTS/internal/lochistory/repository"
 	"github.com/training/GOLANG_FOR_STUDENTS/internal/lochistory/service"
+	"github.com/training/GOLANG_FOR_STUDENTS/pkg/metrics"
 	pb "github.com/training/GOLANG_FOR_STUDENTS/pkg/proto"
 )
 
@@ -73,6 +74,7 @@ func main() {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(requestLogger(logger))
+	router.Use(metrics.RequestCounter("loc-history"))
 
 	api := router.Group("/api/v1")
 	{
