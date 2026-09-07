@@ -89,6 +89,18 @@ func TestUpdateLocation(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
+			name:           "latitude out of range returns 400 not 500",
+			username:       "john1",
+			body:           map[string]interface{}{"latitude": 90.12314, "longitude": lon},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "longitude out of range returns 400 not 500",
+			username:       "john1",
+			body:           map[string]interface{}{"latitude": lat, "longitude": 181.0},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
 			name:           "service error",
 			username:       "john1",
 			body:           map[string]interface{}{"latitude": lat, "longitude": lon},

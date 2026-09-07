@@ -41,6 +41,11 @@ func (h *Handler) UpdateLocation(c *gin.Context) {
 		return
 	}
 
+	if err := validation.ValidateCoordinates(*req.Latitude, *req.Longitude); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	input := service.UpdateLocationInput{
 		Username:  username,
 		Latitude:  *req.Latitude,
