@@ -128,6 +128,13 @@ func TestSaveLocation(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("invalid username", func(t *testing.T) {
+		repo := &mockRepo{}
+		svc := service.New(repo)
+		err := svc.SaveLocation(context.Background(), "ab", 35.12, 27.64, base)
+		require.Error(t, err)
+	})
+
 	t.Run("repo error", func(t *testing.T) {
 		repo := &mockRepo{saveErr: errors.New("write failed")}
 		svc := service.New(repo)

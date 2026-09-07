@@ -11,6 +11,15 @@ import (
 	"github.com/training/GOLANG_FOR_STUDENTS/pkg/validation"
 )
 
+func writeServiceError(c *gin.Context, logger *zap.Logger, logMsg string, err error) {
+	if validation.IsError(err) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	logger.Error(logMsg, zap.Error(err))
+	c.JSON(http.StatusInternalServerError, gin.H{"error": logMsg})
+}
+
 // Handler holds the HTTP handlers for the location history service.
 type Handler struct {
 	svc    service.Service
@@ -25,10 +34,6 @@ func New(svc service.Service, logger *zap.Logger) *Handler {
 // GetDistance handles GET /api/v1/users/:username/distance?from=&to=
 func (h *Handler) GetDistance(c *gin.Context) {
 	username := c.Param("username")
-	if err := validation.ValidateUsername(username); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
 
 	fromStr := c.Query("from")
 	if fromStr == "" {
@@ -57,8 +62,7 @@ func (h *Handler) GetDistance(c *gin.Context) {
 		To:       to,
 	})
 	if err != nil {
-		h.logger.Warn("get distance", zap.String("username", username), zap.Error(err))
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeServiceError(c, h.logger, "failed to get distance", err)
 		return
 	}
 

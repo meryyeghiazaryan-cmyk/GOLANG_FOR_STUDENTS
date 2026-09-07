@@ -11,6 +11,15 @@ import (
 	"github.com/training/GOLANG_FOR_STUDENTS/pkg/validation"
 )
 
+func writeServiceError(c *gin.Context, logger *zap.Logger, logMsg string, err error) {
+	if validation.IsError(err) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	logger.Error(logMsg, zap.Error(err))
+	c.JSON(http.StatusInternalServerError, gin.H{"error": logMsg})
+}
+
 // Handler holds the HTTP handlers for the location management service.
 type Handler struct {
 	svc    service.Service
@@ -30,19 +39,10 @@ type updateLocationRequest struct {
 // UpdateLocation handles PUT /api/v1/users/:username/location
 func (h *Handler) UpdateLocation(c *gin.Context) {
 	username := c.Param("username")
-	if err := validation.ValidateUsername(username); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
 
 	var req updateLocationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body: " + err.Error()})
-		return
-	}
-
-	if err := validation.ValidateCoordinates(*req.Latitude, *req.Longitude); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -52,8 +52,7 @@ func (h *Handler) UpdateLocation(c *gin.Context) {
 		Longitude: *req.Longitude,
 	}
 	if err := h.svc.UpdateLocation(c.Request.Context(), input); err != nil {
-		h.logger.Error("update location", zap.String("username", username), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update location"})
+		writeServiceError(c, h.logger, "failed to update location", err)
 		return
 	}
 
@@ -95,8 +94,7 @@ func (h *Handler) SearchByRadius(c *gin.Context) {
 		Size:      size,
 	})
 	if err != nil {
-		h.logger.Warn("search by radius", zap.Error(err))
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeServiceError(c, h.logger, "failed to search users", err)
 		return
 	}
 

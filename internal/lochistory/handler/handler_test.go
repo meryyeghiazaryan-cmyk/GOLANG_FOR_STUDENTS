@@ -14,6 +14,7 @@ import (
 
 	"github.com/training/GOLANG_FOR_STUDENTS/internal/lochistory/handler"
 	"github.com/training/GOLANG_FOR_STUDENTS/internal/lochistory/service"
+	"github.com/training/GOLANG_FOR_STUDENTS/pkg/validation"
 )
 
 type mockService struct {
@@ -80,6 +81,7 @@ func TestGetDistance(t *testing.T) {
 			name:           "invalid username too short",
 			username:       "ab",
 			query:          "?from=2021-09-01T00:00:00Z",
+			svcErr:         validation.NewError("username must be 4-16 alphanumeric characters (a-zA-Z0-9)"),
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
@@ -101,11 +103,18 @@ func TestGetDistance(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			name:           "service error",
+			name:           "service validation error",
 			username:       "john1",
 			query:          "?from=2021-09-01T00:00:00Z",
-			svcErr:         errors.New("'from' must not be after 'to'"),
+			svcErr:         validation.NewError("'from' must not be after 'to'"),
 			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "service persistence error",
+			username:       "john1",
+			query:          "?from=2021-09-01T00:00:00Z",
+			svcErr:         errors.New("db error"),
+			expectedStatus: http.StatusInternalServerError,
 		},
 	}
 

@@ -43,6 +43,13 @@ func New(repo repository.Repository) Service {
 }
 
 func (s *service) SaveLocation(ctx context.Context, username string, lat, lon float64, ts time.Time) error {
+	if err := validation.ValidateUsername(username); err != nil {
+		return fmt.Errorf("validate username: %w", err)
+	}
+	if err := validation.ValidateCoordinates(lat, lon); err != nil {
+		return fmt.Errorf("validate coordinates: %w", err)
+	}
+
 	rec := repository.LocationRecord{
 		Username:   username,
 		Latitude:   lat,
@@ -66,7 +73,7 @@ func (s *service) GetDistance(ctx context.Context, input DistanceInput) (*Distan
 	}
 
 	if input.From.After(input.To) {
-		return nil, fmt.Errorf("'from' must not be after 'to'")
+		return nil, validation.NewError("'from' must not be after 'to'")
 	}
 
 	records, err := s.repo.GetLocationHistory(ctx, input.Username, input.From, input.To)

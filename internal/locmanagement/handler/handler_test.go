@@ -16,6 +16,7 @@ import (
 
 	"github.com/training/GOLANG_FOR_STUDENTS/internal/locmanagement/handler"
 	"github.com/training/GOLANG_FOR_STUDENTS/internal/locmanagement/service"
+	"github.com/training/GOLANG_FOR_STUDENTS/pkg/validation"
 )
 
 type mockService struct {
@@ -62,12 +63,14 @@ func TestUpdateLocation(t *testing.T) {
 			name:           "username too short",
 			username:       "ab",
 			body:           map[string]interface{}{"latitude": lat, "longitude": lon},
+			serviceErr:     validation.NewError("username must be 4-16 alphanumeric characters (a-zA-Z0-9)"),
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
 			name:           "username with special chars",
 			username:       "john!",
 			body:           map[string]interface{}{"latitude": lat, "longitude": lon},
+			serviceErr:     validation.NewError("username must be 4-16 alphanumeric characters (a-zA-Z0-9)"),
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
@@ -92,12 +95,14 @@ func TestUpdateLocation(t *testing.T) {
 			name:           "latitude out of range returns 400 not 500",
 			username:       "john1",
 			body:           map[string]interface{}{"latitude": 90.12314, "longitude": lon},
+			serviceErr:     validation.NewError("latitude must be between -90 and 90"),
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
 			name:           "longitude out of range returns 400 not 500",
 			username:       "john1",
 			body:           map[string]interface{}{"latitude": lat, "longitude": 181.0},
+			serviceErr:     validation.NewError("longitude must be between -180 and 180"),
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
@@ -174,8 +179,14 @@ func TestSearchByRadius(t *testing.T) {
 		{
 			name:           "service validation error",
 			query:          "?lat=35.12&lon=27.64&radius=100",
-			serviceErr:     errors.New("radius must be positive"),
+			serviceErr:     validation.NewError("radius must be a positive number"),
 			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "service persistence error",
+			query:          "?lat=35.12&lon=27.64&radius=100",
+			serviceErr:     errors.New("db timeout"),
+			expectedStatus: http.StatusInternalServerError,
 		},
 		{
 			name:           "default pagination",
