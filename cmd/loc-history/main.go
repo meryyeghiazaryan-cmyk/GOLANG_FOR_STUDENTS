@@ -29,7 +29,7 @@ import (
 
 func main() {
 	logger, _ := zap.NewProduction()
-	defer logger.Sync() //nolint:errcheck
+	defer logger.Sync()
 
 	dbURL := getEnv("DATABASE_URL", "postgres://postgres:password@localhost:5433/loc_history?sslmode=disable")
 	grpcPort := getEnv("GRPC_PORT", "50051")

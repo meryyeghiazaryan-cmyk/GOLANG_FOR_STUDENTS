@@ -87,6 +87,7 @@ Response `200 OK`:
 - Go 1.22+
 - Docker and Docker Compose
 - `protoc` + plugins (only needed to regenerate proto files)
+- [golang-migrate](https://github.com/golang-migrate/migrate) CLI (only for `make migrate-up` / `make migrate-down` when not using Compose)
 
 ### Run with Docker Compose (recommended)
 
@@ -94,8 +95,13 @@ Response `200 OK`:
 docker-compose up --build
 ```
 
-This starts both PostgreSQL databases and both services. The databases are
-auto-initialized from the SQL files in `migrations/`.
+This starts both PostgreSQL databases, applies schema migrations, then both
+services. New files such as `000002_*.up.sql` are applied on the next `up`
+without wiping data. Use `docker-compose down -v` only when you want a full
+reset (deletes all rows).
+
+The first time after switching to golang-migrate, run `docker-compose down -v`
+once so volumes created by the old init scripts are replaced.
 
 ### Run locally (without Docker)
 
@@ -113,15 +119,14 @@ docker run -d --name pghist -e POSTGRES_DB=loc_history \
   -p 5433:5432 postgres:16-alpine
 ```
 
-2. Apply the schema migrations:
+2. Apply schema migrations (requires [golang-migrate](https://github.com/golang-migrate/migrate)):
 
 ```bash
-psql "postgres://postgres:password@localhost:5432/loc_management" \
-  -f migrations/loc-management/001_init.sql
-
-psql "postgres://postgres:password@localhost:5433/loc_history" \
-  -f migrations/loc-history/001_init.sql
+# brew install golang-migrate
+make migrate-up
 ```
+
+Roll back the latest version on both databases with `make migrate-down`.
 
 3. Start `loc-history` first (it provides the gRPC endpoint):
 
@@ -134,6 +139,38 @@ make run-history
 ```bash
 make run-management
 ```
+
+### Adding a later schema change (`ALTER`)
+
+Do **not** edit `000001_init.up.sql`. Add a new numbered pair, for example:
+
+`migrations/loc-management/000002_add_accuracy.up.sql`
+
+```sql
+ALTER TABLE users_location
+    ADD COLUMN accuracy DOUBLE PRECISION;
+```
+
+`migrations/loc-management/000002_add_accuracy.down.sql`
+
+```sql
+ALTER TABLE users_location
+    DROP COLUMN IF EXISTS accuracy;
+```
+
+Then apply (existing rows are kept):
+
+```bash
+docker-compose up --build
+```
+
+or, with local Postgres:
+
+```bash
+make migrate-up
+```
+
+Do not run `docker-compose down -v` unless you want to wipe the databases.
 
 ### Environment variables
 

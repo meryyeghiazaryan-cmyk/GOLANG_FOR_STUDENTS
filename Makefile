@@ -1,8 +1,10 @@
 GOPATH      ?= $(HOME)/go
 PROTO_DIR    = pkg/proto
 PROTO_FILE   = $(PROTO_DIR)/location.proto
+MGMT_DB      = postgres://postgres:password@localhost:5432/loc_management?sslmode=disable
+HIST_DB      = postgres://postgres:password@localhost:5433/loc_history?sslmode=disable
 
-.PHONY: all proto build test test-integration lint docker-up docker-down tidy
+.PHONY: all proto build test test-integration lint docker-up docker-down tidy migrate-up migrate-down
 
 all: proto build
 
@@ -41,6 +43,16 @@ docker-up:
 ## docker-down: tear down all Docker Compose resources
 docker-down:
 	docker-compose down -v
+
+## migrate-up: apply pending SQL migrations (local Postgres on 5432/5433)
+migrate-up:
+	migrate -path migrations/loc-management -database "$(MGMT_DB)" up
+	migrate -path migrations/loc-history -database "$(HIST_DB)" up
+
+## migrate-down: roll back the latest migration on both databases
+migrate-down:
+	migrate -path migrations/loc-management -database "$(MGMT_DB)" down 1
+	migrate -path migrations/loc-history -database "$(HIST_DB)" down 1
 
 ## tidy: tidy go module dependencies
 tidy:
